@@ -8,7 +8,7 @@ import psutil
 import torch
 import yaml
 from diffusers import AutoencoderKL, ControlNetModel, StableDiffusionXLControlNetPipeline
-from PIL import Image
+from PIL import Image, ImageOps
 
 from src.core.memory import VRAMGuard
 
@@ -101,6 +101,11 @@ class ImageTransformerEngine:
             )
 
     @staticmethod
+    def fit_image_proportionally(image: Image.Image, target_size: tuple[int, int]) -> Image.Image:
+        """Encaixa a imagem na resolução alvo preservando as proporções naturais sem esticar."""
+        return ImageOps.fit(image, target_size, method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+
+    @staticmethod
     def process_canny_image(
         image: Image.Image,
         low_threshold: int = 100,
@@ -109,7 +114,7 @@ class ImageTransformerEngine:
     ) -> Image.Image:
         """Extract Canny edge lines formatted for ControlNet input."""
         if target_size and image.size != target_size:
-            image = image.resize(target_size, Image.Resampling.LANCZOS)
+            image = ImageTransformerEngine.fit_image_proportionally(image, target_size)
         img_bgr = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
         edges = cv2.Canny(img_bgr, low_threshold, high_threshold)
         return Image.fromarray(np.stack([edges] * 3, axis=2))
@@ -125,7 +130,7 @@ class ImageTransformerEngine:
         low_threshold: int = 100,
         high_threshold: int = 200,
         seed: int = -1,
-        target_size: tuple[int, int] = (1024, 1024),
+        target_size: tuple[int, int] = (896, 1152),
     ) -> Image.Image:
         """Execute SDXL + ControlNet Canny inference loop."""
         self.load_models()
@@ -135,10 +140,10 @@ class ImageTransformerEngine:
         guidance_scale = inf["default_guidance_scale"] if guidance_scale is None else guidance_scale
         controlnet_scale = inf["controlnet_conditioning_scale"] if controlnet_scale is None else controlnet_scale
 
-        if input_image.size != target_size:
-            input_image = input_image.resize(target_size, Image.Resampling.LANCZOS)
+        # Ajusta a imagem de forma proporcional sem esticar
+        fitted_input = self.fit_image_proportionally(input_image, target_size)
 
-        canny = self.process_canny_image(input_image, low_threshold, high_threshold, target_size=target_size)
+        canny = self.process_canny_image(fitted_input, low_threshold, high_threshold, target_size=target_size)
         generator = torch.Generator(device="cpu").manual_seed(seed) if seed != -1 else None
 
         self.check_free_memory()

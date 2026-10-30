@@ -51,7 +51,7 @@ def create_dashboard(engine: ImageTransformerEngine):
         return engine.process_canny_image(image, int(low_thresh), int(high_thresh), target_size=target_size)
 
     def on_freedom_change(freedom_choice):
-        params = CREATIVE_FREEDOM_LEVELS.get(freedom_choice, {"control_scale": 0.50, "cfg": 7.0})
+        params = CREATIVE_FREEDOM_LEVELS.get(freedom_choice, {"control_scale": 0.65, "cfg": 5.0})
         return params["control_scale"], params["cfg"]
 
     def run_inference(
@@ -59,8 +59,9 @@ def create_dashboard(engine: ImageTransformerEngine):
         prompt,
         neg_prompt,
         style_choice,
-        lighting_choice,
         aspect_choice,
+        lighting_choice,
+        freedom_choice,
         magic_enabled,
         steps,
         guidance,
@@ -102,6 +103,7 @@ def create_dashboard(engine: ImageTransformerEngine):
             "timestamp": datetime.now().isoformat(),
             "style_preset": style_choice,
             "lighting_mood": lighting_choice,
+            "creative_freedom": freedom_choice,
             "aspect_ratio": aspect_choice,
             "dimensions": f"{target_size[0]}x{target_size[1]}",
             "magic_prompt_active": magic_enabled,
@@ -169,14 +171,14 @@ def create_dashboard(engine: ImageTransformerEngine):
                     lighting_choice = gr.Dropdown(
                         label=t("lighting_mood"),
                         choices=list(LIGHTING_MOODS.keys()),
-                        value="Natural de Estúdio (Softbox)",
+                        value="Natural Suave de Estúdio (Softbox)",
                         info=t("lighting_info"),
                         scale=1,
                     )
                     freedom_choice = gr.Dropdown(
                         label=t("creative_mode"),
                         choices=list(CREATIVE_FREEDOM_LEVELS.keys()),
-                        value="Equilibrado (Recomendado: Rosto idêntico + liberdade artística)",
+                        value="Equilibrado (Recomendado: Rosto/Postura idênticos + Realismo)",
                         info=t("creative_info"),
                         scale=1,
                     )
@@ -212,7 +214,7 @@ def create_dashboard(engine: ImageTransformerEngine):
                         minimum=0.0,
                         maximum=2.0,
                         step=0.05,
-                        value=0.5,
+                        value=0.65,
                         label=t("control_scale_label"),
                         info=t("control_scale_info"),
                     )
@@ -220,7 +222,7 @@ def create_dashboard(engine: ImageTransformerEngine):
                         minimum=1.0,
                         maximum=20.0,
                         step=0.5,
-                        value=7.0,
+                        value=5.0,
                         label=t("cfg_label"),
                         info=t("cfg_info"),
                     )
@@ -249,6 +251,7 @@ def create_dashboard(engine: ImageTransformerEngine):
             ### {t('footer_title')}
             {t('footer_steps')}
             {t('footer_freedom')}
+            {t('footer_cfg')}
             {t('footer_aspect')}
             {t('footer_memory')}
             """
@@ -273,8 +276,9 @@ def create_dashboard(engine: ImageTransformerEngine):
                 prompt,
                 neg_prompt,
                 style_choice,
-                lighting_choice,
                 aspect_choice,
+                lighting_choice,
+                freedom_choice,
                 magic_toggle,
                 steps,
                 guidance,
