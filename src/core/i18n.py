@@ -11,7 +11,7 @@ TRANSLATIONS = {
         "source_image": "1. Escolha a Foto Original",
         "style_preset": "2. Estilo Visual",
         "style_info": "Define o acabamento estético e a categoria da pasta onde a imagem será salva.",
-        "aspect_ratio": "3. Formato / Proporção da Imagem",
+        "aspect_ratio": "3. Proporção da Imagem (Aspect Ratio)",
         "aspect_info": "Escolha o formato correto para não esticar ou deformar o assunto da foto.",
         "lighting_mood": "4. Iluminação & Atmosfera",
         "lighting_info": "Adiciona a iluminação profissional perfeita sem precisar digitar prompts complexos.",
@@ -50,7 +50,7 @@ TRANSLATIONS = {
             "mas tem total liberdade para desenhar novas roupas, iluminação realista e cenários envolventes."
         ),
         "footer_aspect": (
-            "* **Proporção (Aspect Ratio):** Use sempre *Retrato (Vertical)* para pessoas e *Paisagem (Cinema)* "
+            "* **Proporção da Imagem:** Use sempre *Retrato (Vertical)* para pessoas e *Paisagem (Cinema)* "
             "para ambientes amplos, evitando que a pessoa fique esticada ou achatada."
         ),
         "footer_memory": (
@@ -70,7 +70,7 @@ TRANSLATIONS = {
         "source_image": "1. Source Input Photo",
         "style_preset": "2. Visual Style Preset",
         "style_info": "Defines aesthetic styling and creates dedicated output folders.",
-        "aspect_ratio": "3. Native Aspect Ratio",
+        "aspect_ratio": "3. Aspect Ratio (Proportions)",
         "aspect_info": "Select the natural orientation to prevent subject distortion or stretching.",
         "lighting_mood": "4. Lighting & Mood Atmosphere",
         "lighting_info": "Applies professional photographic lighting without complex prompt syntax.",
@@ -109,7 +109,7 @@ TRANSLATIONS = {
             "while synthesizing realistic lighting, fresh wardrobe, and cinematic backdrops."
         ),
         "footer_aspect": (
-            "* **Aspect Ratio:** Always pick *Portrait (Vertical)* for people and *Landscape (Cinema)* "
+            "* **Aspect Ratio (Proportions):** Always pick *Portrait (Vertical)* for people and *Landscape (Cinema)* "
             "for wide scenes to prevent subject distortion."
         ),
         "footer_memory": (

@@ -39,7 +39,6 @@ def save_output_image(image: Image.Image, style_folder: str, metadata: dict) -> 
 
 
 def create_dashboard(engine: ImageTransformerEngine):
-    # Por padrão no Mac do usuário iniciamos em Português-BR
     current_lang = "pt_BR"
 
     def t(key: str) -> str:
@@ -158,6 +157,15 @@ def create_dashboard(engine: ImageTransformerEngine):
                         info=t("style_info"),
                         scale=1,
                     )
+                    aspect_choice = gr.Dropdown(
+                        label=t("aspect_ratio"),
+                        choices=list(ASPECT_RATIOS.keys()),
+                        value="Retrato / Vertical (896 x 1152) [Ideal para Pessoas]",
+                        info=t("aspect_info"),
+                        scale=1,
+                    )
+
+                with gr.Row():
                     lighting_choice = gr.Dropdown(
                         label=t("lighting_mood"),
                         choices=list(LIGHTING_MOODS.keys()),
@@ -165,20 +173,11 @@ def create_dashboard(engine: ImageTransformerEngine):
                         info=t("lighting_info"),
                         scale=1,
                     )
-
-                with gr.Row():
                     freedom_choice = gr.Dropdown(
                         label=t("creative_mode"),
                         choices=list(CREATIVE_FREEDOM_LEVELS.keys()),
                         value="Equilibrado (Recomendado: Rosto idêntico + liberdade artística)",
                         info=t("creative_info"),
-                        scale=1,
-                    )
-                    aspect_choice = gr.Dropdown(
-                        label=t("aspect_ratio"),
-                        choices=list(ASPECT_RATIOS.keys()),
-                        value="Retrato / Vertical (896 x 1152) [Ideal para Pessoas]",
-                        info=t("aspect_info"),
                         scale=1,
                     )
 
