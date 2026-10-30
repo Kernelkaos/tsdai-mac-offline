@@ -15,7 +15,7 @@ inference:
 performance:
   enable_attention_slicing: false  # same image, slower; only useful when memory is tight
   enable_vae_tiling: false         # tiling can leave seams; keep off for images up to 1024 px
-  preload_model: true              # load the model when the app starts, not on the first image
+  preload_model: false              # load the model when the app starts, not on the first image
 
 memory:
   # GPU memory cap as a fraction of what macOS recommends for the GPU

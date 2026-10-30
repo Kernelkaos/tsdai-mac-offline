@@ -71,7 +71,6 @@ def main():
         server_name=HOST,
         server_port=args.port,
         share=False,
-        show_api=False,
         theme=dashboard.launch_theme,
     )
 
