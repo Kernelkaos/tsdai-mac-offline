@@ -1,0 +1,28 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.ruff_cache/
+.pytest_cache/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Large Model weights (downloaded via scripts/download_models.py)
+models/
+*.safetensors
+*.bin
+*.ckpt
+*.pt
+*.pth
+
+# Generated user outputs
+outputs/
+flagged/
+
+# System and logs
+.DS_Store
+*.log
+.env
