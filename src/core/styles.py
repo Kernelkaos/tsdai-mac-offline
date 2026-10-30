@@ -5,13 +5,13 @@ from src.core.translator import translate_pt_to_en
 STYLE_PRESETS = {
     "Retrato Fotográfico de Estúdio": {
         "folder": "studio_portrait",
-        "prompt_prefix": "professional photo of ",
+        "prompt_prefix": "award-winning photographic portrait of ",
         "prompt_suffix": (
-            ", 85mm portrait lens, f/2.0 aperture, balanced studio lighting, "
+            ", 85mm portrait lens, balanced natural lighting, "
             "sharp focus, natural realistic skin texture, highly detailed, raw photo, realistic shadows"
         ),
         "negative_suffix": (
-            ", (airbrushed:1.4), (plastic skin:1.4), (oversaturated:1.3), shiny skin, "
+            ", airbrushed, plastic skin, oversaturated, shiny skin, "
             "cartoon, 3d render, illustration, deformed limbs, malformed body, mutant, caricature"
         ),
         "default_cfg": 5.0,
@@ -68,8 +68,8 @@ STYLE_PRESETS = {
 }
 
 LIGHTING_MOODS = {
-    "Natural Suave de Estúdio (Softbox)": "soft diffused studio lighting, gentle ambient light, flattering exposure",
     "Golden Hour (Luz Dourada de Entardecer)": "natural warm golden hour light, soft rim lighting, warm glow",
+    "Natural Suave de Estúdio (Softbox)": "soft diffused studio lighting, gentle ambient light, flattering exposure",
     "Luz Natural de Janela": "soft natural window lighting, gentle realistic falloff, natural indoor ambiance",
     "Cinematográfica Moody": "subtle moody cinematic lighting, natural shadows, controlled contrast",
     "Neon Sutil / Cyberpunk": "subtle neon ambient highlights, cyan and warm tones, realistic street reflection",
@@ -77,32 +77,60 @@ LIGHTING_MOODS = {
 }
 
 CREATIVE_FREEDOM_LEVELS = {
-    "Equilibrado (Recomendado: Rosto/Postura idênticos + Realismo)": {"control_scale": 0.65, "cfg": 5.0},
-    "Fiel / Anatômico (Mantém o corpo, pose e roupas quase intactos)": {"control_scale": 0.85, "cfg": 4.5},
-    "Criativo / Estilizado (Permite inventar roupas e fundos novos)": {"control_scale": 0.50, "cfg": 5.5},
+    "Troca de Roupa (Recomendado para biquíni / novo look mantendo o rosto e postura)": {
+        "ip_scale": 0.80,
+        "control_scale": 0.35,
+        "guidance_end": 0.35,
+        "cfg": 5.0,
+    },
+    "Equilibrado (Mantém a pessoa e silhueta com boa liberdade de cena)": {
+        "ip_scale": 0.80,
+        "control_scale": 0.50,
+        "guidance_end": 0.60,
+        "cfg": 5.0,
+    },
+    "Fiel Extremo (Mesma roupa original, contornos e proporções idênticos)": {
+        "ip_scale": 0.85,
+        "control_scale": 0.80,
+        "guidance_end": 1.0,
+        "cfg": 4.5,
+    },
+    "Criativo / Reinterpretação (Nova pose artística com a mesma fisionomia)": {
+        "ip_scale": 0.70,
+        "control_scale": 0.20,
+        "guidance_end": 0.25,
+        "cfg": 5.5,
+    },
 }
 
 ASPECT_RATIOS = {
-    "Retrato / Vertical (896 x 1152) [Ideal para Pessoas]": (896, 1152),
-    "Quadrado (1024 x 1024) [Padrão Redes Sociais]": (1024, 1024),
+    "Vertical Retrato Cheio (768 x 1344) [Ideal para Corpo Inteiro / Stories]": (768, 1344),
+    "Retrato / Vertical (896 x 1152) [Ideal para Meio Corpo e Retrato]": (896, 1152),
+    "Quadrado (1024 x 1024) [Padrão Feed Redes Sociais]": (1024, 1024),
     "Paisagem / Horizontal (1152 x 896) [Cinema e Ambientes]": (1152, 896),
 }
 
 
 def enhance_prompt_magic(prompt: str) -> str:
-    """Enriquece prompts sem forçar termos conflitantes como rostos em fotos de costas."""
+    """Enriquece prompts sem forçar termos conflitantes."""
     cleaned = prompt.strip()
     if not cleaned:
         return "natural realistic photography, sharp focus, professional quality"
 
-    # Não força 'facial features' se o usuário estiver pedindo foto de costas/corpo
-    if any(k in cleaned.lower() for k in ["costas", "behind", "back"]):
-        return f"{cleaned}, anatomically correct body, natural skin texture, realistic posture, master photography"
+    lower = cleaned.lower()
+    additions = []
 
-    words = cleaned.split()
-    if len(words) < 8:
-        return f"{cleaned}, natural realistic photography, sharp focus, authentic texture, master quality"
-    return cleaned
+    # Se o prompt menciona biquíni ou maiô, ajuda a remover roupas pesadas
+    if any(k in lower for k in ["biquini", "bikini", "maiô", "maio", "swimwear"]):
+        additions.append("bare back, bare legs, fit athletic body")
+
+    if any(k in lower for k in ["costas", "behind", "back"]):
+        additions.append("looking over shoulder, realistic posture")
+
+    extra = ", ".join(additions)
+    if extra:
+        return f"{cleaned}, {extra}, natural skin texture, master photography"
+    return f"{cleaned}, natural skin texture, realistic posture, master photography"
 
 
 def apply_style_and_lighting(
@@ -111,26 +139,27 @@ def apply_style_and_lighting(
     prompt: str,
     negative_prompt: str,
     magic_enabled: bool = True,
-):
-    preset = STYLE_PRESETS.get(style_name, STYLE_PRESETS["Livre (Sem estilo predefinido)"])
+) -> tuple[str, str, str]:
+    """Combina o prompt do usuário, tradução, enriquecimento mágico e presets de iluminação/estilo."""
+    style = STYLE_PRESETS.get(style_name, STYLE_PRESETS["Retrato Fotográfico de Estúdio"])
+    lighting_desc = LIGHTING_MOODS.get(lighting_name, "")
 
-    # Traduz termos em português para inglês fotográfico
-    translated_prompt = translate_pt_to_en(prompt)
+    user_text = translate_pt_to_en(prompt)
+    if magic_enabled:
+        user_text = enhance_prompt_magic(user_text)
 
-    base_prompt = enhance_prompt_magic(translated_prompt) if magic_enabled else translated_prompt.strip()
-    lighting_tag = LIGHTING_MOODS.get(lighting_name, "")
+    # Injeta a iluminação se presente
+    if lighting_desc:
+        user_text = f"{user_text}, {lighting_desc}"
 
-    parts = [preset["prompt_prefix"], base_prompt]
-    if lighting_tag:
-        parts.append(f", {lighting_tag}")
-    parts.append(preset["prompt_suffix"])
+    final_prompt = f"{style['prompt_prefix']}{user_text}{style['prompt_suffix']}".strip()
+    user_neg = translate_pt_to_en(negative_prompt)
 
-    final_prompt = "".join(parts).strip()
+    # Se o usuário pediu biquíni, adicionar roupas do dia a dia no negative prompt automaticamente
+    extra_neg = ""
+    if any(k in prompt.lower() for k in ["biquini", "bikini", "maiô", "maio"]):
+        extra_neg = ", t-shirt, shorts, cotton clothing, crop top, oversized clothes, pants, bermuda"
 
-    if negative_prompt and negative_prompt.strip():
-        translated_neg = translate_pt_to_en(negative_prompt)
-        final_neg = f"{translated_neg.strip()}{preset['negative_suffix']}"
-    else:
-        final_neg = preset["negative_suffix"].lstrip(", ")
+    final_negative = f"{user_neg}{extra_neg}{style['negative_suffix']}".strip().lstrip(", ")
 
-    return final_prompt, final_neg, preset["folder"]
+    return final_prompt, final_negative, style["folder"]

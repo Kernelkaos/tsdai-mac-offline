@@ -47,12 +47,15 @@ def create_dashboard(engine: ImageTransformerEngine):
     def preview_canny(image, low_thresh, high_thresh, aspect_choice):
         if image is None:
             raise gr.Error(t("error_no_image"))
-        target_size = ASPECT_RATIOS.get(aspect_choice, (896, 1152))
+        target_size = ASPECT_RATIOS.get(aspect_choice, (768, 1344))
         return engine.process_canny_image(image, int(low_thresh), int(high_thresh), target_size=target_size)
 
     def on_freedom_change(freedom_choice):
-        params = CREATIVE_FREEDOM_LEVELS.get(freedom_choice, {"control_scale": 0.65, "cfg": 5.0})
-        return params["control_scale"], params["cfg"]
+        params = CREATIVE_FREEDOM_LEVELS.get(
+            freedom_choice,
+            {"ip_scale": 0.80, "control_scale": 0.35, "guidance_end": 0.35, "cfg": 5.0},
+        )
+        return params["ip_scale"], params["control_scale"], params["guidance_end"], params["cfg"]
 
     def run_inference(
         image,
@@ -65,7 +68,9 @@ def create_dashboard(engine: ImageTransformerEngine):
         magic_enabled,
         steps,
         guidance,
+        ip_scale,
         control_scale,
+        guidance_end,
         low_thresh,
         high_thresh,
         seed,
@@ -81,7 +86,7 @@ def create_dashboard(engine: ImageTransformerEngine):
             magic_enabled=magic_enabled,
         )
         actual_seed = int(seed)
-        target_size = ASPECT_RATIOS.get(aspect_choice, (896, 1152))
+        target_size = ASPECT_RATIOS.get(aspect_choice, (768, 1344))
 
         try:
             output = engine.generate(
@@ -91,6 +96,8 @@ def create_dashboard(engine: ImageTransformerEngine):
                 steps=int(steps),
                 guidance_scale=float(guidance),
                 controlnet_scale=float(control_scale),
+                ip_adapter_scale=float(ip_scale),
+                control_guidance_end=float(guidance_end),
                 low_threshold=int(low_thresh),
                 high_threshold=int(high_thresh),
                 seed=actual_seed,
@@ -112,18 +119,21 @@ def create_dashboard(engine: ImageTransformerEngine):
             "final_negative_prompt": styled_neg,
             "steps": int(steps),
             "guidance_scale": float(guidance),
+            "ip_adapter_scale": float(ip_scale),
             "controlnet_scale": float(control_scale),
+            "control_guidance_end": float(guidance_end),
             "low_threshold": int(low_thresh),
             "high_threshold": int(high_thresh),
             "seed": actual_seed,
             "device": engine.device,
         }
+
         saved_path = save_output_image(output, style_folder, metadata)
 
         info = get_memory_info()
         status = (
             f"{t('saved_prefix')} {saved_path.parent.name}/{saved_path.name} ({target_size[0]}x{target_size[1]})\n"
-            f"Hardware: {info['device']} | Alocado: {info['allocated_mb']} MB | Cache: {info['cached_mb']} MB"
+            f"Hardware: {info['device']} | Memória Alocada: {info['allocated_mb']} MB | Cache: {info['cached_mb']} MB"
         )
         return output, status
 
@@ -162,7 +172,7 @@ def create_dashboard(engine: ImageTransformerEngine):
                     aspect_choice = gr.Dropdown(
                         label=t("aspect_ratio"),
                         choices=list(ASPECT_RATIOS.keys()),
-                        value="Retrato / Vertical (896 x 1152) [Ideal para Pessoas]",
+                        value="Vertical Retrato Cheio (768 x 1344) [Ideal para Corpo Inteiro / Stories]",
                         info=t("aspect_info"),
                         scale=1,
                     )
@@ -171,14 +181,14 @@ def create_dashboard(engine: ImageTransformerEngine):
                     lighting_choice = gr.Dropdown(
                         label=t("lighting_mood"),
                         choices=list(LIGHTING_MOODS.keys()),
-                        value="Natural Suave de Estúdio (Softbox)",
+                        value="Golden Hour (Luz Dourada de Entardecer)",
                         info=t("lighting_info"),
                         scale=1,
                     )
                     freedom_choice = gr.Dropdown(
                         label=t("creative_mode"),
                         choices=list(CREATIVE_FREEDOM_LEVELS.keys()),
-                        value="Equilibrado (Recomendado: Rosto/Postura idênticos + Realismo)",
+                        value="Troca de Roupa (Recomendado para biquíni / novo look mantendo o rosto e postura)",
                         info=t("creative_info"),
                         scale=1,
                     )
@@ -202,30 +212,51 @@ def create_dashboard(engine: ImageTransformerEngine):
                 )
 
                 with gr.Accordion(t("adv_accordion"), open=False):
+                    with gr.Row():
+                        ip_scale = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            step=0.05,
+                            value=0.80,
+                            label=t("ip_adapter_label"),
+                            info=t("ip_adapter_info"),
+                        )
+                        control_scale = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            step=0.05,
+                            value=0.35,
+                            label=t("control_scale_label"),
+                            info=t("control_scale_info"),
+                        )
+
+                    with gr.Row():
+                        guidance_end = gr.Slider(
+                            minimum=0.1,
+                            maximum=1.0,
+                            step=0.05,
+                            value=0.35,
+                            label=t("guidance_end_label"),
+                            info=t("guidance_end_info"),
+                        )
+                        guidance = gr.Slider(
+                            minimum=1.0,
+                            maximum=15.0,
+                            step=0.5,
+                            value=5.0,
+                            label=t("cfg_label"),
+                            info=t("cfg_info"),
+                        )
+
                     steps = gr.Slider(
-                        minimum=10,
-                        maximum=100,
+                        minimum=15,
+                        maximum=60,
                         step=1,
-                        value=43,
+                        value=35,
                         label=t("steps_label"),
                         info=t("steps_info"),
                     )
-                    control_scale = gr.Slider(
-                        minimum=0.0,
-                        maximum=2.0,
-                        step=0.05,
-                        value=0.65,
-                        label=t("control_scale_label"),
-                        info=t("control_scale_info"),
-                    )
-                    guidance = gr.Slider(
-                        minimum=1.0,
-                        maximum=20.0,
-                        step=0.5,
-                        value=5.0,
-                        label=t("cfg_label"),
-                        info=t("cfg_info"),
-                    )
+
                     with gr.Row():
                         low_thresh = gr.Slider(minimum=1, maximum=255, step=1, value=100, label=t("canny_low"))
                         high_thresh = gr.Slider(minimum=1, maximum=255, step=1, value=200, label=t("canny_high"))
@@ -249,18 +280,18 @@ def create_dashboard(engine: ImageTransformerEngine):
             f"""
             ---
             ### {t('footer_title')}
-            {t('footer_steps')}
-            {t('footer_freedom')}
-            {t('footer_cfg')}
-            {t('footer_aspect')}
-            {t('footer_memory')}
+            {t('footer_ip_adapter')}
+            {t('footer_clothes')}
+            {t('footer_proportions')}
+            {t('footer_colors')}
+            {t('footer_apple')}
             """
         )
 
         freedom_choice.change(
             fn=on_freedom_change,
             inputs=[freedom_choice],
-            outputs=[control_scale, guidance],
+            outputs=[ip_scale, control_scale, guidance_end, guidance],
         )
 
         preview_canny_btn.click(
@@ -282,7 +313,9 @@ def create_dashboard(engine: ImageTransformerEngine):
                 magic_toggle,
                 steps,
                 guidance,
+                ip_scale,
                 control_scale,
+                guidance_end,
                 low_thresh,
                 high_thresh,
                 seed,

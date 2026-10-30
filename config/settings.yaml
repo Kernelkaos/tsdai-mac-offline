@@ -3,25 +3,24 @@ paths:
   sdxl_base: models/sdxl-base-1.0
   controlnet_canny: models/controlnet-canny-sdxl-1.0
   vae: models/sdxl-vae-fp16-fix
+  image_encoder: models/image_encoder
+  ip_adapter: models/ip_adapter
 
 inference:
   image_size: 1024
-  default_steps: 43
-  default_guidance_scale: 7.5
-  controlnet_conditioning_scale: 0.5
+  default_steps: 35
+  default_guidance_scale: 5.0
+  controlnet_conditioning_scale: 0.35
+  control_guidance_end: 0.35
+  ip_adapter_scale: 0.80
 
-# Tuned for maximum quality and speed on a Mac with plenty of unified memory (64 GB).
-# Macs with 16-32 GB: set both options below to true and lower gpu_memory_limit_ratio to 0.8.
 performance:
-  enable_attention_slicing: false  # same image, slower; only useful when memory is tight
-  enable_vae_tiling: false         # tiling can leave seams; keep off for images up to 1024 px
-  preload_model: false              # load the model when the app starts, not on the first image
+  enable_attention_slicing: false  # keep false on M1 Max with 64GB
+  enable_vae_tiling: false         # keep false for images up to 1344 px
+  preload_model: false             # load on first generation
 
 memory:
   # GPU memory cap as a fraction of what macOS recommends for the GPU
-  # (51.8 GB on a 64 GB Mac, about 80% of the RAM). If the cap is reached the app
-  # shows an "out of memory" error instead of the whole Mac slowing down or freezing.
-  # Allowed range: 0.1 to 1.0. The value 0 (no limit) is refused on purpose.
   gpu_memory_limit_ratio: 1.0
   # Refuse to start a generation when less than this much memory is available.
   min_free_memory_gb: 12

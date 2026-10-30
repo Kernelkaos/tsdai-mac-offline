@@ -9,6 +9,7 @@ import torch
 import yaml
 from diffusers import AutoencoderKL, ControlNetModel, StableDiffusionXLControlNetPipeline
 from PIL import Image, ImageOps
+from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 from src.core.memory import VRAMGuard
 
@@ -23,6 +24,8 @@ REQUIRED_FILES = {
     ],
     "controlnet_canny": ["config.json", "diffusion_pytorch_model.fp16.safetensors"],
     "vae": ["config.json", "diffusion_pytorch_model.safetensors"],
+    "image_encoder": ["config.json", "model.safetensors"],
+    "ip_adapter": ["ip-adapter-plus-face_sdxl_vit-h.safetensors"],
 }
 
 
@@ -35,12 +38,13 @@ class InsufficientMemoryError(RuntimeError):
 
 
 class ImageTransformerEngine:
-    """SDXL + ControlNet Canny pipeline reading exclusively from local files (Apple Silicon)."""
+    """SDXL + ControlNet Canny + IP-Adapter Face pipeline reading exclusively from local files (Apple Silicon)."""
 
     def __init__(self, config_path: str | Path | None = None):
         self.config = self._load_config(Path(config_path) if config_path else ROOT / "config" / "settings.yaml")
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
         self.pipe = None
+        self.has_ip_adapter = False
 
     def _load_config(self, path: Path) -> dict:
         if not path.exists():
@@ -85,6 +89,27 @@ class ImageTransformerEngine:
             self.pipe.to(torch.float32)
         self.pipe.to(self.device)
 
+        # Carregar IP-Adapter Face SDXL (LoRA Instantânea de Identidade)
+        image_encoder_path = self._model_path("image_encoder")
+        ip_adapter_path = self._model_path("ip_adapter")
+        ip_weight = ip_adapter_path / "ip-adapter-plus-face_sdxl_vit-h.safetensors"
+
+        if (image_encoder_path / "model.safetensors").exists() and ip_weight.exists():
+            image_encoder = CLIPVisionModelWithProjection.from_pretrained(
+                image_encoder_path, torch_dtype=dtype, local_files_only=True
+            ).to(self.device)
+            feature_extractor = CLIPImageProcessor()
+            self.pipe.register_modules(image_encoder=image_encoder, feature_extractor=feature_extractor)
+
+            self.pipe.load_ip_adapter(
+                str(ip_adapter_path),
+                subfolder="",
+                weight_name="ip-adapter-plus-face_sdxl_vit-h.safetensors",
+                image_encoder_folder=None,
+                local_files_only=True,
+            )
+            self.has_ip_adapter = True
+
         if perf.get("enable_attention_slicing"):
             self.pipe.enable_attention_slicing()
         if perf.get("enable_vae_tiling"):
@@ -127,39 +152,55 @@ class ImageTransformerEngine:
         steps: int | None = None,
         guidance_scale: float | None = None,
         controlnet_scale: float | None = None,
+        ip_adapter_scale: float | None = None,
+        control_guidance_end: float | None = None,
+        reference_image: Image.Image | None = None,
         low_threshold: int = 100,
         high_threshold: int = 200,
         seed: int = -1,
-        target_size: tuple[int, int] = (896, 1152),
+        target_size: tuple[int, int] = (768, 1344),
     ) -> Image.Image:
-        """Execute SDXL + ControlNet Canny inference loop."""
+        """Execute SDXL + ControlNet Canny + IP-Adapter inference loop."""
         self.load_models()
 
         inf = self.config["inference"]
-        steps = inf["default_steps"] if steps is None else steps
-        guidance_scale = inf["default_guidance_scale"] if guidance_scale is None else guidance_scale
-        controlnet_scale = inf["controlnet_conditioning_scale"] if controlnet_scale is None else controlnet_scale
+        steps = inf.get("default_steps", 35) if steps is None else steps
+        guidance_scale = inf.get("default_guidance_scale", 5.0) if guidance_scale is None else guidance_scale
+        cnet_default = inf.get("controlnet_conditioning_scale", 0.35)
+        controlnet_scale = cnet_default if controlnet_scale is None else controlnet_scale
+        ip_adapter_scale = inf.get("ip_adapter_scale", 0.80) if ip_adapter_scale is None else ip_adapter_scale
+        guidance_end_def = inf.get("control_guidance_end", 0.35)
+        control_guidance_end = guidance_end_def if control_guidance_end is None else control_guidance_end
 
-        # Ajusta a imagem de forma proporcional sem esticar
+        # Encaixa a imagem de entrada de forma proporcional sem distorção
         fitted_input = self.fit_image_proportionally(input_image, target_size)
-
         canny = self.process_canny_image(fitted_input, low_threshold, high_threshold, target_size=target_size)
+
         generator = torch.Generator(device="cpu").manual_seed(seed) if seed != -1 else None
+
+        pipe_kwargs = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "image": canny,
+            "num_inference_steps": steps,
+            "guidance_scale": guidance_scale,
+            "controlnet_conditioning_scale": controlnet_scale,
+            "control_guidance_start": 0.0,
+            "control_guidance_end": control_guidance_end,
+            "generator": generator,
+            "width": target_size[0],
+            "height": target_size[1],
+        }
+
+        if self.has_ip_adapter:
+            ref = reference_image if reference_image is not None else fitted_input
+            self.pipe.set_ip_adapter_scale(ip_adapter_scale)
+            pipe_kwargs["ip_adapter_image"] = ref
 
         self.check_free_memory()
         try:
             with VRAMGuard():
-                result = self.pipe(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    image=canny,
-                    num_inference_steps=steps,
-                    guidance_scale=guidance_scale,
-                    controlnet_conditioning_scale=controlnet_scale,
-                    generator=generator,
-                    width=target_size[0],
-                    height=target_size[1],
-                )
+                result = self.pipe(**pipe_kwargs)
         except RuntimeError as e:
             if "out of memory" in str(e).lower():
                 raise InsufficientMemoryError(
